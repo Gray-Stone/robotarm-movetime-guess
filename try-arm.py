@@ -9,27 +9,22 @@ from threading import Event
 
 from interbotix_xs_modules.xs_robot.arm import InterbotixManipulatorXS
 
-
+import robot_log_storage
 
 int_event = Event()
 def int_handle (signal , frame):
     print("Sig Int Catched")
     int_event.set()
 
-signal.signal(signal.SIGINT)
+signal.signal(signal.SIGINT,int_handle)
+
+def str_list_float(print_list):
+    
+   return  [ f"{num:.2f} " for num in print_list]
 
 
 
 
-# The robot object is what you use to control the robot
-robot = InterbotixManipulatorXS("px100", "arm", "gripper")
-
-
-
-
-last_js  = robot.core.joint_states
-
-last_cycle_start = time.monotonic_ns()
 
 
 # On each loop: check if js is updated, log js if so.
@@ -39,6 +34,14 @@ last_cycle_start = time.monotonic_ns()
 # Interbotix have no checking on if a move is done. We need to do our own tolerance check.
 
 # use the python time monotonic_ns to be current cycle serial number.
+# The robot object is what you use to control the robot
+robot = InterbotixManipulatorXS("px100", "arm", "gripper")
+
+last_js  = robot.core.joint_states
+
+last_cycle_start = time.monotonic_ns()
+
+log_store = robot_log_storage.RobotLogStorage(last_js.name)
 
 while True:
     # These to only get saved into last_* if this cycle is meaningful.
@@ -46,34 +49,29 @@ while True:
     cycle_start = time.monotonic_ns()
     if js.header == last_js.header:
         # There are totally nothing to do if JS is not updated.
-
         print("Same js, no change!")
         continue
 
+    if js.header.stamp == last_js.header.stamp:
+        raise ValueError(f"\ncurrent header {js.header} , \nlast_js header{last_js.header}")
     # New js.
     js_t_delta = js.header.stamp.nanosec - last_js.header.stamp.nanosec
     py_t_delta = cycle_start - last_cycle_start
 
-    print(f"\n ...\ncycle_delta {(py_t_delta) /1000000} , js_t_delta = {js_t_delta/1000000}")
+    js_t_delta_s = js_t_delta / 1e9
+    print(f"\n ...\py_ncycle_delta_ms {(py_t_delta) /1e6} , js_t_delta_ms = {js_t_delta/1e6}")
 
-    # Store the JS.
-    print(f"JS {js.position}")
+    # Store the JS.  
+    print(f"JS {str_list_float(js.position)}")
+    print(f"JS V {str_list_float(js.velocity)}")
 
-
-
-
+    log_store.log_js(js)
 
     robot.arm.set_joint_positions
-    # tui_cmd = getch()
-    # print("\n==============")
-    # print(f"User intput {tui_cmd} , value {ord(tui_cmd)}")
-
-    # # Special stuff to exit
-    # if ord(tui_cmd) == 3:
-    #     break
-    # if ord(tui_cmd) == 28:
-    #     break
-
+    
     last_js = js
     last_cycle_start = cycle_start
-    time.sleep(0.001) # 10ms
+
+    if Event.wait(int_event,timeout=1):
+        print("Finish looping due to int flag")
+        break
