@@ -1,8 +1,5 @@
 #! /usr/bin/env python3
 import time
-import yaml
-import dataclasses
-import dataclass_wizard
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -10,219 +7,16 @@ import torch.optim as optim
 from torch.utils import data
 import plotly.express as px
 
+"""
 
-class SimpleLinearNetwork(nn.Module):
+These are Helper functions that help generate the layers in each model. 
 
-    def __init__(self, input_dim, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.layer_stack = nn.Sequential(
-            nn.Linear(input_dim, input_dim * 2),
-            nn.Linear(input_dim * 2, int(input_dim * 1.5)),
-            nn.Linear(int(input_dim * 1.5), int(input_dim * 0.7)),
-            nn.Linear(int(input_dim * 0.7), 1),
-        )
-        print(self.layer_stack)
-
-    def forward(self, x):
-        ypred = self.layer_stack(x)
-        return ypred
-
-
-class WideLinearNetwork(nn.Module):
-
-    def __init__(self, input_dim, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-        layers = gen_shrinking_linear_layers(input_dim, 15, layer_number=6)
-        self.layer_stack = nn.Sequential(*layers)
-        print(self.layer_stack)
-
-    def forward(self, x):
-        ypred = self.layer_stack(x)
-        return ypred
-
-class DiamondLinerNetwork(nn.Module):
-
-    def __init__(self, input_dim, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-        layers_up, last_dim = gen_even_step_layers(input_dim, 120, layer_number=5)
-        layers_down, last_dim = gen_even_step_layers(last_dim, 3, layer_number=5)
-        layers_down.append(nn.Linear(int(last_dim), 1))
-        self.layer_stack = nn.Sequential(*layers_up + layers_down)
-        print(self.layer_stack)
-
-    def forward(self, x):
-        ypred = self.layer_stack(x)
-        return ypred
-
-
-class NonLinearNetwork(nn.Module):
-
-    def __init__(self, input_dim, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.layer_stack = nn.Sequential(
-            nn.Linear(input_dim, input_dim * 2),
-            nn.Tanh(),
-            nn.Linear(input_dim * 2, int(input_dim * 1.5)),
-            nn.Tanh(),
-            nn.Linear(int(input_dim * 1.5), int(input_dim * 0.7)),
-            nn.Tanh(),
-            nn.Linear(int(input_dim * 0.7), 1),
-        )
-        print(self.layer_stack)
-
-    def forward(self, x):
-        ypred = self.layer_stack(x)
-        return ypred
-
-
-class WideTanhNetwork(nn.Module):
-
-    def __init__(self, input_dim, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-        layers = gen_shrinking_linear_layers(input_dim, 15, layer_number=6)
-
-        self.layer_stack = nn.Sequential(*intersperse(layers, nn.Tanh()))
-        print(self.layer_stack)
-
-    def forward(self, x):
-        ypred = self.layer_stack(x)
-        return ypred
-
-class SimplerTanhNetwork(nn.Module):
-    def __init__(self, input_dim, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-        layers_up, last_dim = gen_even_step_layers(input_dim, 100, layer_number=2)
-        layers_down, last_dim = gen_even_step_layers(last_dim, 1, layer_number=6)
-
-        layers = intersperse(layers_up + layers_down, nn.Tanh())
-        layers.append(nn.Tanh())
-        layers.append(nn.Linear(int(last_dim), 1))
-
-        self.layer_stack = nn.Sequential(*layers)
-        print(self.layer_stack)
-
-    def forward(self, x):
-        ypred = self.layer_stack(x)
-        return ypred
-
-class DiamondMixesNetwork(nn.Module):
-    def __init__(self, input_dim, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-        layers_up, last_dim = gen_even_step_layers(input_dim, 120, layer_number=5)
-        layers_down, last_dim = gen_even_step_layers(last_dim, 3, layer_number=5)
-        layers_down.append(nn.Linear(int(last_dim), 1))
-
-        layers = intersperse(layers_up + layers_down, nn.Tanh())
-        self.layer_stack = nn.Sequential(*layers)
-        print(self.layer_stack)
-
-    def forward(self, x):
-        ypred = self.layer_stack(x)
-        return ypred
-
-class TanhReluNetwork(nn.Module):
-    def __init__(self, input_dim, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-        layers_up, last_dim = gen_even_step_layers(input_dim, 100, layer_number=2)
-        layers_down, last_dim = gen_even_step_layers(last_dim, 5, layer_number=10)
-
-        layers = intersperse(layers_up + layers_down, nn.Tanh())
-        layers.append(nn.ReLU())
-        layers.append(nn.Linear(int(last_dim), 1))
-        self.layer_stack = nn.Sequential(*layers)
-        print(self.layer_stack)
-
-    def forward(self, x):
-        ypred = self.layer_stack(x)
-        return ypred
-
-
-class TanhShrinkNetwork(nn.Module):
-    def __init__(self, input_dim, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-        layers_up, last_dim = gen_even_step_layers(input_dim, 100, layer_number=2)
-        layers_down, last_dim = gen_even_step_layers(last_dim, 1, layer_number=6)
-
-        layers = intersperse(layers_up + layers_down, nn.Tanh())
-        layers.append(nn.Tanh())
-        layers.append(nn.Linear(int(last_dim), 1))
-
-        layers[3] = nn.Tanhshrink()
-
-        self.layer_stack = nn.Sequential(*layers)
-        print(self.layer_stack)
-
-    def forward(self, x):
-        ypred = self.layer_stack(x)
-        return ypred
-
-class LongMixedNetwork(nn.Module):
-    def __init__(self, input_dim, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-        layers_up, last_dim = gen_even_step_layers(input_dim, 300, layer_number=5)
-        layers_down, last_dim = gen_even_step_layers(last_dim, 3, layer_number=40)
-
-        layers = intersperse(layers_up + layers_down, nn.Tanh())
-        layers.append(nn.ReLU())
-        layers.append(nn.Linear(int(last_dim), 1))
-        self.layer_stack = nn.Sequential(*layers)
-        print(self.layer_stack)
-
-    def forward(self, x):
-        ypred = self.layer_stack(x)
-        return ypred
-
-
-
-class LeakyReLU_Tanh_ReLU_Network(nn.Module):
-    def __init__(self, input_dim, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-        layers_up, last_dim = gen_even_step_layers(input_dim, 120, layer_number=2)
-        layers_down, last_dim = gen_even_step_layers(last_dim, 5, layer_number=10)
-
-        layers = intersperse(layers_up + layers_down, nn.Tanh())
-        layers.append(nn.ReLU())
-        layers.append(nn.Linear(int(last_dim), 1))
-        
-        layers[5] = nn.LeakyReLU()
-        
-        self.layer_stack = nn.Sequential(*layers)
-        
-        print(self.layer_stack)
-
-    def forward(self, x):
-        ypred = self.layer_stack(x)
-        return ypred
+"""
 
 def intersperse(base_list, mix_item):
     result = [mix_item] * (len(base_list) * 2 - 1)
     result[0::2] = base_list
     return result
-
-
-def gen_expanding_linear_layers(starting_dim, end_dim, layer_number):
-
-    dim_step_size = (end_dim - starting_dim) / layer_number
-
-    last_out_dim = starting_dim
-    next_out_dim = starting_dim + dim_step_size
-
-    layers = []
-    while next_out_dim < end_dim:
-        layers.append(nn.Linear(int(last_out_dim), int(next_out_dim)))
-        last_out_dim = next_out_dim
-        next_out_dim = last_out_dim + dim_step_size
-
-    return (layers, last_out_dim)
 
 
 def gen_even_step_layers(starting_dim, end_dim, layer_number):
@@ -248,7 +42,7 @@ def gen_even_step_layers(starting_dim, end_dim, layer_number):
 
 
 def gen_shrinking_linear_layers(starting_dim, scale_up_factor, layer_number):
-    
+
     init_output_dim = starting_dim * scale_up_factor
     init_layer = nn.Linear(int(starting_dim), int(init_output_dim))
     layers, last_dim = gen_even_step_layers(init_output_dim, 1, layer_number)
@@ -257,6 +51,257 @@ def gen_shrinking_linear_layers(starting_dim, scale_up_factor, layer_number):
     return [init_layer] + layers
 
 
+
+"""
+The following models are arranged in the order I create and test them. 
+
+They mostly represent my through processing of attempting different models. 
+
+All the models are mainly only differ in how they stack up. 
+The forward function among them are the same.
+"""
+
+class SimpleLinearNetwork(nn.Module):
+    def __init__(self, input_dim, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.layer_stack = nn.Sequential(
+            nn.Linear(input_dim, input_dim * 2),
+            nn.Linear(input_dim * 2, int(input_dim * 1.5)),
+            nn.Linear(int(input_dim * 1.5), int(input_dim * 0.7)),
+            nn.Linear(int(input_dim * 0.7), 1),
+        )
+        print(f"\n{type(self).__name__}")
+        print(self.layer_stack)
+
+    def forward(self, x):
+        ypred = self.layer_stack(x)
+        return ypred
+
+
+class WideLinearNetwork(nn.Module):
+    def __init__(self, input_dim, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        layers = gen_shrinking_linear_layers(input_dim, 15, layer_number=6)
+        self.layer_stack = nn.Sequential(*layers)
+        print(f"\n{type(self).__name__}")
+        print(self.layer_stack)
+
+    def forward(self, x):
+        ypred = self.layer_stack(x)
+        return ypred
+
+class DiamondLinerNetwork(nn.Module):
+    def __init__(self, input_dim, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        layers_up, last_dim = gen_even_step_layers(input_dim, 120, layer_number=5)
+        layers_down, last_dim = gen_even_step_layers(last_dim, 3, layer_number=5)
+        layers_down.append(nn.Linear(int(last_dim), 1))
+        self.layer_stack = nn.Sequential(*layers_up + layers_down)
+        print(f"\n{type(self).__name__}")
+        print(self.layer_stack)
+
+    def forward(self, x):
+        ypred = self.layer_stack(x)
+        return ypred
+
+
+class NonLinearNetwork(nn.Module):
+    def __init__(self, input_dim, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.layer_stack = nn.Sequential(
+            nn.Linear(input_dim, input_dim * 2),
+            nn.Tanh(),
+            nn.Linear(input_dim * 2, int(input_dim * 1.5)),
+            nn.Tanh(),
+            nn.Linear(int(input_dim * 1.5), int(input_dim * 0.7)),
+            nn.Tanh(),
+            nn.Linear(int(input_dim * 0.7), 1),
+        )
+        print(f"\n{type(self).__name__}")
+        print(self.layer_stack)
+
+    def forward(self, x):
+        ypred = self.layer_stack(x)
+        return ypred
+
+
+class WideTanhNetwork(nn.Module):
+    def __init__(self, input_dim, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        layers = gen_shrinking_linear_layers(input_dim, 15, layer_number=6)
+
+        self.layer_stack = nn.Sequential(*intersperse(layers, nn.Tanh()))
+        print(f"\n{type(self).__name__}")
+        print(self.layer_stack)
+
+    def forward(self, x):
+        ypred = self.layer_stack(x)
+        return ypred
+
+class SimpleTanhNetwork(nn.Module):
+    def __init__(self, input_dim, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        layers_up, last_dim = gen_even_step_layers(input_dim, 100, layer_number=2)
+        layers_down, last_dim = gen_even_step_layers(last_dim, 1, layer_number=6)
+
+        layers = intersperse(layers_up + layers_down, nn.Tanh())
+        layers.append(nn.Tanh())
+        layers.append(nn.Linear(int(last_dim), 1))
+
+        self.layer_stack = nn.Sequential(*layers)
+        print(f"\n{type(self).__name__}")
+        print(self.layer_stack)
+
+    def forward(self, x):
+        ypred = self.layer_stack(x)
+        return ypred
+
+class DiamondMixesNetwork(nn.Module):
+    def __init__(self, input_dim, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        layers_up, last_dim = gen_even_step_layers(input_dim, 120, layer_number=5)
+        layers_down, last_dim = gen_even_step_layers(last_dim, 3, layer_number=5)
+        layers_down.append(nn.Linear(int(last_dim), 1))
+
+        layers = intersperse(layers_up + layers_down, nn.Tanh())
+        self.layer_stack = nn.Sequential(*layers)
+        print(f"\n{type(self).__name__}")
+        print(self.layer_stack)
+
+    def forward(self, x):
+        ypred = self.layer_stack(x)
+        return ypred
+
+class TanhReluNetwork(nn.Module):
+    def __init__(self, input_dim, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        layers_up, last_dim = gen_even_step_layers(input_dim, 100, layer_number=2)
+        layers_down, last_dim = gen_even_step_layers(last_dim, 5, layer_number=10)
+
+        layers = intersperse(layers_up + layers_down, nn.Tanh())
+        layers.append(nn.ReLU())
+        layers.append(nn.Linear(int(last_dim), 1))
+        self.layer_stack = nn.Sequential(*layers)
+        print(f"\n{type(self).__name__}")
+        print(self.layer_stack)
+
+    def forward(self, x):
+        ypred = self.layer_stack(x)
+        return ypred
+
+class TanhShrinkNetwork(nn.Module):
+    def __init__(self, input_dim, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        layers_up, last_dim = gen_even_step_layers(input_dim, 100, layer_number=2)
+        layers_down, last_dim = gen_even_step_layers(last_dim, 1, layer_number=6)
+
+        layers = intersperse(layers_up + layers_down, nn.Tanh())
+        layers.append(nn.Tanh())
+        layers.append(nn.Linear(int(last_dim), 1))
+
+        layers[3] = nn.Tanhshrink()
+
+        self.layer_stack = nn.Sequential(*layers)
+        print(f"\n{type(self).__name__}")
+        print(self.layer_stack)
+
+    def forward(self, x):
+        ypred = self.layer_stack(x)
+        return ypred
+
+class LongMixedNetwork(nn.Module):
+    def __init__(self, input_dim, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        layers_up, last_dim = gen_even_step_layers(input_dim, 300, layer_number=5)
+        layers_down, last_dim = gen_even_step_layers(last_dim, 3, layer_number=40)
+
+        layers = intersperse(layers_up + layers_down, nn.Tanh())
+        layers.append(nn.ReLU())
+        layers.append(nn.Linear(int(last_dim), 1))
+        self.layer_stack = nn.Sequential(*layers)
+        print(f"\n{type(self).__name__}")
+        print(self.layer_stack)
+
+    def forward(self, x):
+        ypred = self.layer_stack(x)
+        return ypred
+
+""" This is the best working model so far. No idea why. 
+"""
+class LeakyReLU_Tanh_ReLU_Network(nn.Module):
+    def __init__(self, input_dim, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        layers_up, last_dim = gen_even_step_layers(input_dim, 120, layer_number=2)
+        layers_down, last_dim = gen_even_step_layers(last_dim, 5, layer_number=10)
+
+        layers = intersperse(layers_up + layers_down, nn.Tanh())
+        layers.append(nn.ReLU())
+        layers.append(nn.Linear(int(last_dim), 1))
+
+        layers[5] = nn.LeakyReLU()
+
+        self.layer_stack = nn.Sequential(*layers)
+
+        print(f"\n{type(self).__name__}")
+        print(self.layer_stack)
+
+    def forward(self, x):
+        ypred = self.layer_stack(x)
+        return ypred
+
+class Tanh_LeakyReluNetwork(nn.Module):
+    def __init__(self, input_dim, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        layers_up, last_dim = gen_even_step_layers(input_dim, 100, layer_number=2)
+        layers_down, last_dim = gen_even_step_layers(last_dim, 5, layer_number=10)
+
+        layers = intersperse(layers_up + layers_down, nn.Tanh())
+        layers.append(nn.LeakyReLU())
+        layers.append(nn.Linear(int(last_dim), 1))
+        self.layer_stack = nn.Sequential(*layers)
+        print(f"\n{type(self).__name__}")
+        print(self.layer_stack)
+
+    def forward(self, x):
+        ypred = self.layer_stack(x)
+        return ypred
+
+class MostlyLeakyReluNetwork(nn.Module):
+    def __init__(self, input_dim, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        layers_up, last_dim = gen_even_step_layers(input_dim, 100, layer_number=2)
+        layers_down, last_dim = gen_even_step_layers(last_dim, 5, layer_number=10)
+
+        layers = intersperse(layers_up + layers_down, nn.LeakyReLU())
+        layers.append(nn.LeakyReLU())
+        layers.append(nn.Linear(int(last_dim), 1))
+
+        # Only the first 2 activation is Tanh
+        layers[1] = nn.Tanh()
+        layers[3] = nn.Tanh()
+
+        self.layer_stack = nn.Sequential(*layers)
+        print(f"\n{type(self).__name__}")
+        print(self.layer_stack)
+
+    def forward(self, x):
+        ypred = self.layer_stack(x)
+        return ypred
+
+""" 
+These are helper function for the machine learning process.  
+"""
 def train_once(dataloader: data.DataLoader, model, loss_fn, optimizer):
     num_batches = len(dataloader)
 
@@ -290,7 +335,9 @@ def test_once(dataloader, model, loss_fn):
     test_loss /= num_batches
     return test_loss
 
-
+""" 
+A data class to group model and its target data. 
+"""
 class ModelAndData():
 
     def __init__(self, model, train_data, test_data) -> None:
@@ -318,8 +365,11 @@ def main():
         input_expanded_df[f"diff_{i}"] = start_value - end_value
         i += 1
 
+    # Since robot's joint range is usually += pi or +=2pi (for smaller joints)
+    # Thus simply scale down by 6.3 should have all input to be within -1 to 1
+    input_scaled_df = input_df / 6
     output_df = df.filter(like="motion_duration")
-    
+
     input_dim = len(input_df.columns)
     input_extended_dim = len(input_expanded_df.columns)
     print(f"{input_dim} Input columns: {input_df.columns}")
@@ -339,6 +389,10 @@ def main():
                                    requires_grad=True,
                                    dtype=torch.float,
                                    device=device)
+    scaled_x_tensor = torch.tensor(input_scaled_df.values,
+                                   requires_grad=True,
+                                   dtype=torch.float,
+                                   device=device)
     y_tensor = torch.tensor(output_df.values, requires_grad=True, dtype=torch.float, device=device)
     print(f"basic xshape:{basic_x_tensor.shape}")
     print(f"extend xshape:{extend_x_tensor.shape}")
@@ -349,39 +403,47 @@ def main():
         data.TensorDataset(basic_x_tensor, y_tensor), [1 - test_data_percent, test_data_percent])
     extend_train_dataset, extend_test_dataset = data.random_split(
         data.TensorDataset(extend_x_tensor, y_tensor), [1 - test_data_percent, test_data_percent])
+    scaled_train_dataset, scaled_test_dataset = data.random_split(
+        data.TensorDataset(scaled_x_tensor, y_tensor), [1 - test_data_percent, test_data_percent])
 
     basic_train_loader = data.DataLoader(basic_train_dataset, batch_size=64)
     basic_test_loader = data.DataLoader(basic_test_dataset, batch_size=64)
     extend_train_loader = data.DataLoader(extend_train_dataset, batch_size=64)
     extend_test_loader = data.DataLoader(extend_test_dataset, batch_size=64)
+    scaled_train_loader = data.DataLoader(scaled_train_dataset, batch_size=64)
+    scaled_test_loader = data.DataLoader(scaled_test_dataset, batch_size=64)
     train_loss_model_map = {}
     test_loss_model_map = {}
 
     # Creating different models
     model_dict = {
-        "LongMixedNetwork_basic": 
+        "SimpleLinearNetwork":
                     ModelAndData(
-                LongMixedNetwork(basic_x_tensor.shape[1]).to(device), basic_train_loader,
+                SimpleLinearNetwork(basic_x_tensor.shape[1]).to(device), basic_train_loader,
                 basic_test_loader),
-        "TanhReluNetwork_basic": 
+        "TanhReluNetwork":
                     ModelAndData(
                 TanhReluNetwork(basic_x_tensor.shape[1]).to(device), basic_train_loader,
                 basic_test_loader),
-        "DiamondMixesNetwork-basic": 
+        "SimpleTanhNetwork":
+                    ModelAndData(
+                SimpleTanhNetwork(basic_x_tensor.shape[1]).to(device), basic_train_loader,
+                basic_test_loader),
+        "LeakyReLU_Tanh_ReLU_Network":
+                    ModelAndData(
+                LeakyReLU_Tanh_ReLU_Network(basic_x_tensor.shape[1]).to(device), basic_train_loader,
+                basic_test_loader),
+        "Tanh_LeakyReluNetwork":
+                    ModelAndData(
+                Tanh_LeakyReluNetwork(basic_x_tensor.shape[1]).to(device), basic_train_loader,
+                basic_test_loader),
+        "DiamondMixesNetwork":
                     ModelAndData(
                 DiamondMixesNetwork(basic_x_tensor.shape[1]).to(device), basic_train_loader,
                 basic_test_loader),
-        "MixedDisNetwork-basic": 
-                    ModelAndData(
-                MixedDisNetwork(basic_x_tensor.shape[1]).to(device), basic_train_loader,
-                basic_test_loader),
-        "TanhShrinkNetwork-basic": 
-                    ModelAndData(
-                TanhShrinkNetwork(basic_x_tensor.shape[1]).to(device), basic_train_loader,
-                basic_test_loader),
+
     }
 
-    # loss_fn = torch.nn.MSELoss()
     loss_fn = torch.nn.L1Loss()
     for name, model_and_data in model_dict.items():
         start_time = time.time()
@@ -406,8 +468,16 @@ def main():
         test_loss_model_map[name] = test_loss_list
 
     fig = px.line(train_loss_model_map, title="Training data cost over iteration")
+    fig.update_layout(
+        xaxis_title="iteration",
+        yaxis_title="cost"
+    )
     fig.show()
     fig = px.line(test_loss_model_map, title="Testing data cost over iteration")
+    fig.update_layout(
+        xaxis_title="iteration",
+        yaxis_title="cost"
+    )
     fig.show()
     # Now we save all models to file
     for name, model_and_data in model_dict.items():
